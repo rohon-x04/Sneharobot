@@ -8,7 +8,7 @@
 
 *Chats like a friend · Manages your group · Runs a full economy*
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)
 ![Groq](https://img.shields.io/badge/AI-Groq-F55036?style=for-the-badge)
 ![Render](https://img.shields.io/badge/Deploy-Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)
@@ -51,9 +51,15 @@
 ├── tools.py            help menu, utilities, /imagine, owner tools
 ├── welcome_card.py     card generator
 ├── welcome_styles.py   random card styles
+├── requirements.txt    Python packages
+├── render.yaml         Render settings
+├── env.example         list of environment variables
+├── .gitignore
 ├── assets/             DejaVuSans.ttf, sneha-banner.png
-└── backgrounds/        welcome card images
+└── backgrounds/        optional: welcome card pictures (.jpg/.png). Without it, cards use the classic style
 ```
+
+Keep every `.py` file in the **main folder** (not inside another folder).
 
 ---
 
@@ -73,6 +79,7 @@
 |---|:---:|---|
 | `BOT_TOKEN` | ✅ | From [@BotFather](https://t.me/BotFather) |
 | `GROQ_API_KEY` | ✅ | From [console.groq.com/keys](https://console.groq.com/keys) |
+| `GROQ_MODEL` | ➖ | Default `openai/gpt-oss-20b`. If it stops working, Sneha tries backup models by herself |
 | `API_ID` / `API_HASH` | ➖ | From [my.telegram.org](https://my.telegram.org) → API Development Tools |
 | `FIREBASE_URL` | ⭐ | Realtime Database URL. **Without it, data is lost on every redeploy** |
 | `FIREBASE_SECRET` | ⭐ | Database secret (leave blank if your rules are open for testing) |
@@ -172,8 +179,25 @@
 /id /info /adminlist /chatinfo /ping /time
 /calc <expression>   /report (reply)
 /imagine <prompt>    /reset
-/stats  /broadcast   (owner only)
+/stats  /broadcast  /aitest   (owner only)
 ```
+</details>
+
+---
+
+## 🩺 Troubleshooting
+
+<details>
+<summary><b>Sneha is not replying</b></summary>
+
+1. Send **/aitest** to the bot in DM (you must be the owner: set `OWNER_ID` in Render). It shows the exact Groq error.
+2. `Key set: NO` or `HTTP 401` → `GROQ_API_KEY` is missing or wrong. Create a new key at [console.groq.com/keys](https://console.groq.com/keys) and paste it in Render → Environment.
+3. `HTTP 400 ... decommissioned` or `404` → Groq retired that model. Sneha tries backups automatically; or set `GROQ_MODEL` to a model from the [Groq model list](https://console.groq.com/docs/models). (`llama-3.1-8b-instant` was shut down on 16 Aug 2026.)
+4. `HTTP 429` → Groq free limit reached. Wait a minute.
+5. In **groups**, Sneha answers only when you say "sneha", @mention her, or reply to her message. Also set BotFather `/setprivacy` → **Disable**.
+6. Logs full of `409 Conflict` → the same bot token is running somewhere else. Stop the other copy, or revoke the token in @BotFather and update `BOT_TOKEN`.
+7. Logs say `FIREBASE PROBLEM` → `FIREBASE_URL` must be the Realtime Database URL, like `https://yourproject-default-rtdb.firebaseio.com`.
+
 </details>
 
 ---

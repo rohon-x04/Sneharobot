@@ -146,6 +146,8 @@ def set_menu():
 
 if __name__ == "__main__":
     threading.Thread(target=run_server, daemon=True).start()
+    if not core.GROQ_API_KEY:
+        log.error("GROQ_API_KEY is not set - Sneha will not chat. Add it in Render > Environment.")
     ok, why = store.check()
     if not ok:
         log.error("FIREBASE PROBLEM: %s. Using local data.json for now.", why)
