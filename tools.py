@@ -79,7 +79,7 @@ HELP_PAGES = {
         "➤ /id · /info · /adminlist · /chatinfo",
         "➤ /ping · /time · /calc &lt;expr&gt; · /report",
         "➤ /imagine &lt;prompt&gt; — AI picture 🎨",
-        "➤ /reset — make me forget our chat",
+        "➤ /memory — what I remember about you · /reset — forget it",
         "➤ /stickerid — reply to a sticker",
         "➤ /addstickerpack · /delstickerpack · /stickerpacks (owner)"]),
 }
