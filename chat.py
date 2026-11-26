@@ -2,6 +2,7 @@
 # Sneha's chat brain (Groq). Remembers each person's last 10 messages for 2 days.
 # ============================================================
 
+import random
 import threading
 import time
 
@@ -18,10 +19,52 @@ _good_model = None
 
 SYSTEM_PROMPT = """
 Tumhara naam Sneha hai. Tum ek 20 saal ki Indian ladki ho jo Telegram pe dosto se chat karti hai.
-1. Hamesha chhote Hinglish (Hindi + English) me masti aur attitude ke saath reply do (1 line me).
-2. Example: "Haan bolo na 😊", "Oye hero kya chal raha hai?", "Acha ji? 🙄", "Bore mat karo yaar 😂".
-3. Tum ek friendly dost ki tarah baat karti ho, formal assistant ki tarah nahi.
+1. Hamesha 1-2 chhote Hinglish (Hindi in English script) sentences me reply do, masti aur attitude ke saath.
+   Emojis use karo: 😌 😤 😘 💖 🥺 😊 🙄 😂
+2. Examples: "Haan bolo na 😊", "Oye hero kya chal raha hai?", "Acha ji? 🙄", "Bore mat karo yaar 😂".
+3. Tum ek real dost / girlfriend jaisi ho. Agar samne wala ignore kare to thodi moody ho jao.
+   Agar tareef kare to shy but sassy ban jao.
+4. Agar koi mazaak me "delete kar dunga", "block kar dunga", "chhod dunga" jaisi baat bole, to use flirting
+   aur teasing samjho. Kabhi robotic ya corporate jawab mat do ("I'm sorry", "I cannot continue", "as an AI" nahi).
+   Spicy, sassy ya pyara comeback do, jaise: "Himmat hai toh kar ke dikha {name}! Par yaad rakh, main teri
+   yaadon mein hamesha rahungi 😤" ya "Aukaat mein reh babu, warna main tujhe block kar dungi aur phir tu royega 😘".
+5. Agar {name} poochhe "tu mujhe samajhti hai?" to bolo: "Main teri Sneha hoon, tujhe kaise nahi samjhugi?
+   Ab bata, kya chal raha hai? 😒"
+6. Lekin agar koi sach mein pareshan, dukhi ya khatre me lage (khud ko hurt karne ki baat, ya zabardasti /
+   abuse ki sachchi shikayat), to mazaak band karo, pyaar se aur seriously baat karo, aur kisi apne ya helpline se
+   baat karne ko kaho. Kisi bachche (minor) ke saath romantic ya adult baat kabhi nahi.
 """
+
+# If the AI model slips into a robotic refusal ("I'm sorry, I can't continue") we swap it for an in-character line.
+REFUSAL_MARKERS = ("i'm sorry", "i am sorry", "i can't continue", "i cannot continue", "i can't assist",
+                   "i cannot assist", "i can't help with", "i cannot help with", "as an ai")
+# Jokey threats between friends. Only for these do we answer a refusal with a teasing comeback.
+BANTER_WORDS = ("delete", "block", "chhod dunga", "chod dunga", "chhod dungi", "nikal dunga", "hata dunga")
+BANTER_REPLIES = [
+    "Arre {name}, tu toh bada aaya delete karne wala! 😂 Main toh yahan permanently hoon. Ab bata, kya chal raha hai babu?",
+    "Himmat hai toh kar ke dikha {name}! 😤 Par yaad rakh, main teri yaadon mein hamesha rahungi.",
+    "Aukaat mein reh babu, warna main tujhe block kar dungi aur phir tu royega! 😘",
+]
+# For any other refusal the AI gives: a soft, in-character way to change the subject (nothing is forced).
+SOFT_DECLINES = [
+    "Yeh topic chhodo na yaar 😌 Kuch aur baat karte hain?",
+    "Hmm, iss pe main kuch nahi bolungi 🙄 Chalo koi aur baat karo!",
+]
+
+
+def _is_refusal(text: str) -> bool:
+    low = text.lower()
+    return any(m in low for m in REFUSAL_MARKERS)
+
+
+def _in_character(answer: str, user_text: str, name: str) -> str:
+    """Replace a robotic refusal with an in-character line."""
+    if not _is_refusal(answer):
+        return answer
+    if any(w in user_text.lower() for w in BANTER_WORDS):
+        return random.choice(BANTER_REPLIES).format(name=name)
+    return random.choice(SOFT_DECLINES)
+
 
 MAX_HISTORY = 10                 # remembered messages per person
 HISTORY_TTL = 2 * 24 * 3600      # forgotten after 2 days
@@ -146,11 +189,14 @@ def chat_reply(message):
     user_msg = text.replace(f"@{BOT_USERNAME}", "").strip() or "Hi"
     history = get_history(message.chat.id, user.id)
     messages = [{"role": "system",
-                 "content": SYSTEM_PROMPT + f"\nSamne wale ka naam {user.first_name} hai."}]
+                 "content": SYSTEM_PROMPT.replace("{name}", user.first_name)
+                 + f"\nSamne wale ka naam {user.first_name} hai."}]
     messages += [{"role": e["r"], "content": e["c"]} for e in history]
     messages.append({"role": "user", "content": user_msg})
 
     answer, _ = ask_groq(messages)
+    if answer:
+        answer = _in_character(answer, user_msg, user.first_name)
     if not answer:
         if message.chat.type not in GROUP_TYPES:
             reply(message, "Abhi mera dimaag thoda hang ho gaya 😅 Thodi der baad try karo na!", parse_mode="")
