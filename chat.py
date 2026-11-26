@@ -2,6 +2,7 @@
 # Sneha's chat brain (Groq). Remembers each person's last 10 messages for 2 days.
 # ============================================================
 
+import os
 import random
 import threading
 import time
@@ -66,8 +67,12 @@ def _in_character(answer: str, user_text: str, name: str) -> str:
     return random.choice(SOFT_DECLINES)
 
 
-MAX_HISTORY = 10                 # remembered messages per person
-HISTORY_TTL = 2 * 24 * 3600      # forgotten after 2 days
+# Short-term memory: the last N messages with each person. Long-term memory: a short note of facts about them
+# (name, likes, plans...) that Sneha rewrites every SUMMARY_EVERY answers, so she remembers older chats too.
+MAX_HISTORY = int(os.environ.get("AI_HISTORY", "30"))
+HISTORY_TTL = float(os.environ.get("AI_HISTORY_DAYS", "30")) * 24 * 3600
+SUMMARY_EVERY = int(os.environ.get("AI_SUMMARY_EVERY", "15"))      # 0 = no long-term memory
+MEMORY_MAX_CHARS = 600
 
 _cache = {}
 _lock = threading.Lock()
@@ -105,7 +110,67 @@ def clear_history(chat_id, user_id):
     k = _key(chat_id, user_id)
     with _lock:
         _cache[k] = []
+        _memory.pop(k, None)
+        _since.pop(k, None)
     store.delete(f"ai/{k}")
+    store.delete(f"aimem/{k}")
+
+
+# ---------------------------------------------------------------- long-term memory
+_memory = {}      # key -> short note about the person
+_since = {}       # key -> answers since the note was last rewritten
+
+
+def get_memory(chat_id, user_id) -> str:
+    k = _key(chat_id, user_id)
+    with _lock:
+        if k not in _memory:
+            note = store.get(f"aimem/{k}", "")
+            _memory[k] = note if isinstance(note, str) else ""
+        return _memory[k]
+
+
+MEMORY_PROMPT = (
+    "You keep a short memory note about one person chatting with Sneha, an Indian girl chatbot. "
+    "Update the note using the old note and the recent chat. Keep only lasting, harmless facts: their name or "
+    "nickname, likes and dislikes, hobbies, plans, running jokes, how they like to be teased. Do NOT keep "
+    "passwords, phone numbers, addresses, ids, money details, health details or anything private. "
+    "Drop outdated facts. Write plain text, under 500 characters, no lists of messages. "
+    "If there is nothing worth keeping, repeat the old note."
+)
+
+
+def update_memory(chat_id, user_id, name):
+    """Rewrite the long-term note (runs in the background)."""
+    k = _key(chat_id, user_id)
+    old = get_memory(chat_id, user_id)
+    convo = "\n".join(f"{'User' if e['r'] == 'user' else 'Sneha'}: {e['c']}" for e in get_history(chat_id, user_id))
+    if not convo:
+        return
+    note, _ = ask_groq([
+        {"role": "system", "content": MEMORY_PROMPT},
+        {"role": "user", "content": f"Person's name: {name}\n\nOld note:\n{old or '(empty)'}\n\n"
+                                    f"Recent chat:\n{convo}\n\nWrite the updated note."},
+    ])
+    if not note:
+        return
+    note = note.strip()[:MEMORY_MAX_CHARS]
+    with _lock:
+        _memory[k] = note
+    store.put(f"aimem/{k}", note)
+
+
+def _after_answer(chat_id, user_id, name):
+    if SUMMARY_EVERY <= 0:
+        return
+    k = _key(chat_id, user_id)
+    with _lock:
+        _since[k] = _since.get(k, 0) + 1
+        due = _since[k] >= SUMMARY_EVERY
+        if due:
+            _since[k] = 0
+    if due:
+        run_async(update_memory, chat_id, user_id, name)
 
 
 def _models():
@@ -188,9 +253,12 @@ def chat_reply(message):
     user = message.from_user
     user_msg = text.replace(f"@{BOT_USERNAME}", "").strip() or "Hi"
     history = get_history(message.chat.id, user.id)
+    memory = get_memory(message.chat.id, user.id)
     messages = [{"role": "system",
                  "content": SYSTEM_PROMPT.replace("{name}", user.first_name)
-                 + f"\nSamne wale ka naam {user.first_name} hai."}]
+                 + f"\nSamne wale ka naam {user.first_name} hai."
+                 + (f"\nPichli baatein se tumhe iske baare mein yaad hai: {memory}\n"
+                    "(Isse naturally use karo, par har baar mat dohrao.)" if memory else "")}]
     messages += [{"role": e["r"], "content": e["c"]} for e in history]
     messages.append({"role": "user", "content": user_msg})
 
@@ -203,6 +271,7 @@ def chat_reply(message):
         return
     add_history(message.chat.id, user.id, "user", user_msg)
     add_history(message.chat.id, user.id, "assistant", answer)
+    _after_answer(message.chat.id, user.id, user.first_name)
     reply(message, answer, parse_mode="")
     try:
         import stickers
@@ -215,6 +284,18 @@ def chat_reply(message):
 def reset_cmd(message):
     clear_history(message.chat.id, message.from_user.id)
     reply(message, "Ok ok, sab bhool gayi 🙈 Chalo fresh start!")
+
+
+@command("memory", "mymemory")
+def memory_cmd(message):
+    note = get_memory(message.chat.id, message.from_user.id)
+    count = len(get_history(message.chat.id, message.from_user.id))
+    if note:
+        reply(message, f"🧠 <b>Mujhe tumhare baare mein yaad hai:</b>\n{esc(note)}\n\n"
+                       f"💬 Recent messages remembered: {count}\n/reset se sab bhula sakte ho.")
+    else:
+        reply(message, f"🧠 Abhi tak koi lambi yaad nahi banayi, par recent {count} messages yaad hain 😊\n"
+                       "Thodi aur baat karo, phir yaad ho jayega!")
 
 
 @command("aitest")

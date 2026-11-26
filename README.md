@@ -23,7 +23,7 @@
 
 | | Feature | What it does |
 |---|---|---|
-| 💬 | **AI Chat** | Sneha talks in short, sassy Hinglish. Remembers each person's last 10 messages for 2 days |
+| 💬 | **AI Chat** | Sneha talks in short, sassy Hinglish. Remembers recent messages (30, for 30 days) and keeps a long-term note about each person (`/memory`) |
 | 🎭 | **Sticker replies** | Send her a sticker and she answers with one |
 | 🌈 | **Colourful buttons** | Blue, green and red inline buttons in menus and games |
 | 🛡 | **Moderation** | kick, ban, mute (timed), warn system, promote/demote tiers, pin, purge |
@@ -91,6 +91,7 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 | `LOG_CHAT_ID` | ➖ | Group that gets a message when the bot is added or removed |
 | `START_STICKER` | ➖ | Sticker file_id shown before the `/start` menu |
 | `START_IMAGE` | ➖ | Picture for `/start` (default: `assets/sneha-banner.png`) |
+| `AI_HISTORY` / `AI_HISTORY_DAYS` / `AI_SUMMARY_EVERY` | ➖ | Memory: recent messages kept (default `30`), for how many days (`30`), and how often she updates her long-term note (every `15` answers, `0` = off) |
 | `STICKER_PACKS` | ➖ | Sticker packs Sneha answers with (pack short names, comma separated) |
 | `STICKER_BLOCK_WORDS` | ➖ | Extra words that mark a sticker pack as 18+ (a built-in list already blocks adult packs and emojis) |
 | `STICKER_CHANCE` | ➖ | `0`-`1`: chance she adds a sticker after a chat answer. Default `0.1`, `0` = never |
@@ -184,7 +185,7 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 ```
 /id /info /adminlist /chatinfo /ping /time
 /calc <expression>   /report (reply)
-/imagine <prompt>    /reset    /stickerid (reply to a sticker)
+/imagine <prompt>    /memory    /reset    /stickerid (reply to a sticker)
 /addstickerpack <link|name>   /delstickerpack   /stickerpacks   (owner only)
 /stats  /broadcast  /aitest   (owner only)
 ```
