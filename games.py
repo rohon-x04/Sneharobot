@@ -78,11 +78,19 @@ def rps_cmd(message):
     reply(message, f"You: {yours}\nMe: {mine}\n\n{result}")
 
 
+GUESS_COOLDOWN = 60
+_last_guess = {}
+
+
 @command("guess")
 def guess_cmd(message):
     u = message.from_user
+    wait = GUESS_COOLDOWN - (time.time() - _last_guess.get(u.id, 0))
+    if wait > 0:
+        return reply(message, f"⏳ Thoda ruko! Next guess in {int(wait) + 1}s.")
     if not message.args or not message.args[0].isdigit() or not 1 <= int(message.args[0]) <= 100:
         return reply(message, "⚠️ Usage: /guess &lt;number 1-100&gt;")
+    _last_guess[u.id] = time.time()
     guess, answer = int(message.args[0]), random.randint(1, 100)
     ensure_user(u.id, u.first_name, u.username)
     if guess == answer:
@@ -108,7 +116,8 @@ def _poor(message, amount):
 
 
 # ------------------------------------------------------------ jackpot
-SLOTS = [("🍒", 30, 4), ("🍋", 25, 4), ("🔔", 20, 6), ("⭐", 15, 8), ("💎", 7, 12), ("7️⃣", 3, 20)]
+# (symbol, pick weight, payout if all 3 match). A pair gives the stake back. Overall return is about 94%.
+SLOTS = [("🍒", 30, 7), ("🍋", 25, 7), ("🔔", 20, 11), ("⭐", 15, 14), ("💎", 7, 22), ("7️⃣", 3, 36)]
 _SYM = [s for s, _, _ in SLOTS]
 _WEIGHT = [w for _, w, _ in SLOTS]
 _PAY = {s: p for s, _, p in SLOTS}
@@ -118,7 +127,7 @@ def jackpot_multiplier(reels) -> int:
     if reels[0] == reels[1] == reels[2]:
         return _PAY[reels[0]]
     if len(set(reels)) < 3:
-        return 2
+        return 1
     return 0
 
 
@@ -140,7 +149,8 @@ def jackpot_cmd(message):
     win = amount * mult
     if win:
         credit(message.from_user.id, win)
-        result = f"🎉 {mult}x payout — you win {money(win)}!"
+        result = (f"🤝 A pair — you get your {money(amount)} back." if mult == 1
+                  else f"🎉 {mult}x payout — you win {money(win)}!")
     else:
         result = f"💸 No match — you lost {money(amount)}."
     text = f"🎰 [ {' | '.join(reels)} ]\n{result}"

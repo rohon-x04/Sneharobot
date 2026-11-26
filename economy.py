@@ -16,8 +16,16 @@ def balance(uid) -> int:
 
 
 def credit(uid, amount: int):
-    if amount:
-        store.incr(f"users/{uid}/balance", amount)
+    """Add money. Retries a few times so a database blip can't swallow a winner's payout."""
+    if not amount:
+        return
+    for attempt in range(4):
+        try:
+            store.incr(f"users/{uid}/balance", amount)
+            return
+        except Exception:
+            time.sleep(0.5 * (attempt + 1))
+    raise RuntimeError(f"could not credit {amount} to {uid}")
 
 
 def spend(user, amount: int) -> bool:
@@ -130,7 +138,7 @@ def rob_cmd(message):
     ensure_user(robber.id, robber.first_name, robber.username)
     ensure_user(victim.id, victim.first_name, victim.username)
 
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     with store.lock:
         rec = store.get(f"users/{robber.id}", {}) or {}
         count = rec.get("rob_count", 0) if rec.get("rob_day") == today else 0
@@ -174,7 +182,7 @@ def leaderboard_cmd(message):
 def profile_cmd(message):
     t, _ = _who(message)
     rec = store.get(f"users/{t.id}", {}) or {}
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     robs = rec.get("rob_count", 0) if rec.get("rob_day") == today else 0
     level, into, need = level_from_xp(int(rec.get("xp", 0)))
     reply(message,

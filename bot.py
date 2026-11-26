@@ -28,7 +28,10 @@ import tools  # noqa: E402,F401
 
 
 def dispatch(message):
-    track(message)
+    try:
+        track(message)
+    except Exception:
+        log.warning("track failed", exc_info=True)
 
     # joins (service message)
     if message.content_type == "new_chat_members":

@@ -17,6 +17,10 @@ import requests
 log = logging.getLogger("sneha.store")
 
 
+class StoreError(Exception):
+    """A database read failed - callers must NOT assume the data is empty."""
+
+
 def key(text: str) -> str:
     """Make any text safe to use as a database key (Firebase forbids . $ # [ ] /)."""
     return text.encode("utf-8").hex()
@@ -124,8 +128,9 @@ class Store:
             self._cache.pop(k, None)
 
     # ---------------------------------------------------------- public API
-    def get(self, path: str, default=None, ttl: float = 0):
-        """Read a value. `ttl` (seconds) lets hot paths reuse a recent remote read."""
+    def get(self, path: str, default=None, ttl: float = 0, strict: bool = False):
+        """Read a value. `ttl` (seconds) lets hot paths reuse a recent remote read.
+        strict=True raises StoreError if Firebase can't be read (use before read-modify-write)."""
         path = path.strip("/")
         with self.lock:
             if not self.remote:
@@ -141,6 +146,8 @@ class Store:
             val = r.json()
         except Exception as e:
             log.warning("store.get(%s) failed: %s", path, e)
+            if strict:
+                raise StoreError(str(e))
             return default
         if ttl:
             self._cache[path] = (time.monotonic() + ttl, copy.deepcopy(val))
@@ -194,7 +201,7 @@ class Store:
         """Add `delta` to a number. If the result would drop below `floor`, change
         nothing and return None. Returns the new value otherwise."""
         with self.lock:
-            cur = self.get(path, 0) or 0
+            cur = self.get(path, 0, strict=True) or 0
             if not isinstance(cur, (int, float)):
                 cur = 0
             new = cur + delta
