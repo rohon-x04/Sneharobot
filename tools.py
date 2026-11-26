@@ -80,7 +80,8 @@ HELP_PAGES = {
         "➤ /ping · /time · /calc &lt;expr&gt; · /report",
         "➤ /imagine &lt;prompt&gt; — AI picture 🎨",
         "➤ /reset — make me forget our chat",
-        "➤ /stickerid — reply to a sticker"]),
+        "➤ /stickerid — reply to a sticker",
+        "➤ /addstickerpack · /delstickerpack · /stickerpacks (owner)"]),
 }
 
 # (button text, page key) - colours cycle blue / green / red

@@ -13,7 +13,8 @@ import re
 import threading
 import time
 
-from core import BOT, GROUP_TYPES, bot, command, log, reply
+from core import (BOT, GROUP_TYPES, bot, command, esc, is_owner, log, reply, store)
+from store import key
 
 # short names = the part after t.me/addstickers/   (override with the STICKER_PACKS variable)
 DEFAULT_PACKS = [
@@ -39,6 +40,24 @@ _AGE18 = re.compile(r"(?<!\d)18(?!\d)")      # "18" on its own (18+, pack_18) bu
 USE_SENDER_PACK = os.environ.get("STICKER_USE_SENDER_PACK", "0") == "1"
 
 
+def extra_packs():
+    """Packs added with /addstickerpack (saved in the database, re-read every minute)."""
+    global _extra_loaded, _extra
+    if time.time() - _extra_loaded > 60:
+        data = store.get("config/sticker_packs", {}) or {}
+        _extra = sorted(v for v in data.values() if isinstance(v, str))
+        _extra_loaded = time.time()
+    return _extra
+
+
+def active_packs():
+    out = []
+    for n in PACKS + extra_packs():
+        if n not in out:
+            out.append(n)
+    return out
+
+
 def pack_name_ok(name) -> bool:
     low = (name or "").lower()
     return not (_AGE18.search(low) or any(w in low for w in BLOCKED_WORDS))
@@ -53,6 +72,8 @@ def sticker_ok(sticker) -> bool:
 
 
 _cache = {}               # pack name -> [file_id, ...]
+_extra_loaded = 0.0       # when the saved packs were last read
+_extra = []               # packs added with /addstickerpack
 _lock = threading.Lock()
 _last_chat_sticker = {}   # chat id -> time (so she doesn't spam)
 
@@ -85,7 +106,7 @@ def pick(own_sticker=None):
     set_name = getattr(own_sticker, "set_name", None)
     if USE_SENDER_PACK and set_name:
         candidates += pack_stickers(set_name)
-    for name in PACKS:
+    for name in active_packs():
         candidates += pack_stickers(name)
     if candidates:
         return random.choice(candidates)
@@ -141,3 +162,80 @@ def stickerid_cmd(message):
         return reply(message, "⚠️ Reply to a sticker with /stickerid to get its file_id.")
     pack = r.sticker.set_name or "none"
     reply(message, f"🆔 <code>{r.sticker.file_id}</code>\n📦 Pack: <code>{pack}</code>")
+
+
+# ------------------------------------------------------------ pack management (owner only)
+def parse_pack_name(text):
+    """'https://t.me/addstickers/NAME', 't.me/addstickers/NAME' or just 'NAME' -> NAME"""
+    text = (text or "").strip().split()[0] if (text or "").strip() else ""
+    if "addstickers/" in text:
+        text = text.split("addstickers/", 1)[1]
+    return text.split("?")[0].strip("/ ")
+
+
+def _target_pack(message):
+    r = message.reply_to_message
+    if r and r.sticker and r.sticker.set_name:
+        return r.sticker.set_name
+    return parse_pack_name(message.rest)
+
+
+@command("addstickerpack", "addpack")
+def addstickerpack_cmd(message):
+    if not is_owner(message.from_user.id):
+        return reply(message, "❌ Only the bot owner can add sticker packs.")
+    name = _target_pack(message)
+    if not name:
+        return reply(message, "⚠️ Usage: /addstickerpack &lt;pack link or name&gt;\n"
+                              "or reply to a sticker with /addstickerpack")
+    if not pack_name_ok(name):
+        return reply(message, "🚫 That pack's name looks 18+, so I won't add it.")
+    if name in active_packs():
+        return reply(message, "✅ That pack is already in my list.")
+    try:
+        pack = bot.get_sticker_set(name)
+        all_stickers = list(pack.stickers)
+    except Exception:
+        return reply(message, "❌ I couldn't find that sticker pack. Send the link like "
+                              "t.me/addstickers/PackName")
+    if not all_stickers:
+        return reply(message, "❌ That pack is empty.")
+    safe = [s for s in all_stickers if sticker_ok(s)]
+    skipped = len(all_stickers) - len(safe)
+    if not safe or skipped / len(all_stickers) >= 0.2:
+        return reply(message, f"🚫 {skipped} of {len(all_stickers)} stickers in that pack look 18+, "
+                              "so I won't add it.")
+    store.put(f"config/sticker_packs/{key(name)}", name)
+    global _extra_loaded
+    _extra_loaded = 0.0
+    with _lock:
+        _cache[name] = (None, [s.file_id for s in safe])
+    note = f"\n🛡 Skipped {skipped} sticker(s) that looked 18+." if skipped else ""
+    reply(message, f"✅ Added sticker pack <b>{esc(pack.title or name)}</b> "
+                   f"({len(safe)} stickers).{note}")
+
+
+@command("delstickerpack", "removestickerpack")
+def delstickerpack_cmd(message):
+    if not is_owner(message.from_user.id):
+        return reply(message, "❌ Only the bot owner can remove sticker packs.")
+    name = _target_pack(message)
+    if not name:
+        return reply(message, "⚠️ Usage: /delstickerpack &lt;pack link or name&gt; (or reply to a sticker)")
+    if key(name) not in (store.get("config/sticker_packs", {}) or {}):
+        if name in PACKS:
+            return reply(message, "ℹ️ That pack comes from the STICKER_PACKS setting / built-in list. "
+                                  "Change it in Render > Environment.")
+        return reply(message, "❌ That pack isn't in my added list.")
+    store.delete(f"config/sticker_packs/{key(name)}")
+    global _extra_loaded
+    _extra_loaded = 0.0
+    reply(message, f"🗑️ Removed sticker pack <code>{esc(name)}</code>.")
+
+
+@command("stickerpacks", "packs")
+def stickerpacks_cmd(message):
+    if not is_owner(message.from_user.id):
+        return
+    lines = [f"• <code>{esc(n)}</code>" for n in active_packs()] or ["(none)"]
+    reply(message, "🎭 <b>Sticker packs I use</b>\n" + "\n".join(lines))

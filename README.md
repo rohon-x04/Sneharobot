@@ -185,6 +185,7 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 /id /info /adminlist /chatinfo /ping /time
 /calc <expression>   /report (reply)
 /imagine <prompt>    /reset    /stickerid (reply to a sticker)
+/addstickerpack <link|name>   /delstickerpack   /stickerpacks   (owner only)
 /stats  /broadcast  /aitest   (owner only)
 ```
 </details>
