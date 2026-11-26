@@ -7,10 +7,14 @@ import time
 
 import requests
 
-from core import (BOT, BOT_USERNAME, GROQ_API_KEY, GROQ_MODEL, GROUP_TYPES, bot, command,
-                  log, reply, run_async, store)
+from core import (BOT, BOT_USERNAME, GROQ_API_KEY, GROQ_MODEL, GROUP_TYPES, bot, command, esc,
+                  is_owner, log, reply, run_async, store)
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Groq retires models now and then (llama-3.1-8b-instant was shut down on 16 Aug 2026), so if the
+# chosen model stops working we try these in order and remember whichever one answers.
+FALLBACK_MODELS = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
+_good_model = None
 
 SYSTEM_PROMPT = """
 Tumhara naam Sneha hai. Tum ek 20 saal ki Indian ladki ho jo Telegram pe dosto se chat karti hai.
@@ -61,6 +65,60 @@ def clear_history(chat_id, user_id):
     store.delete(f"ai/{k}")
 
 
+def _models():
+    order = ([_good_model] if _good_model else []) + [GROQ_MODEL] + FALLBACK_MODELS
+    seen, out = set(), []
+    for m in order:
+        if m and m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
+
+
+def ask_groq(messages):
+    """Ask Groq, trying fallback models. Returns (answer or None, list of notes about what happened)."""
+    global _good_model
+    notes = []
+    if not GROQ_API_KEY:
+        return None, ["GROQ_API_KEY is not set"]
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    for model in _models():
+        payload = {"model": model, "messages": messages, "temperature": 0.85, "max_tokens": 400}
+        if model.startswith("openai/gpt-oss"):
+            # reasoning models: keep thinking short so the reply isn't cut off
+            payload.update(reasoning_effort="low", include_reasoning=False)
+        for attempt in range(2):
+            try:
+                resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=30)
+            except Exception as e:
+                notes.append(f"{model}: request failed ({e})")
+                log.warning("Groq request failed: %s", e)
+                return None, notes
+            if resp.status_code == 200:
+                try:
+                    text = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+                except Exception:
+                    text = ""
+                if text:
+                    _good_model = model
+                    return text, notes + [f"{model}: OK"]
+                notes.append(f"{model}: empty reply")
+                break
+            body = resp.text[:200].replace("\n", " ")
+            notes.append(f"{model}: HTTP {resp.status_code} {body}")
+            log.warning("Groq %s -> HTTP %s %s", model, resp.status_code, body)
+            if resp.status_code in (401, 403):
+                return None, notes          # bad key - other models won't help
+            if resp.status_code == 429:
+                return None, notes          # rate limited - try again later
+            if resp.status_code == 400 and attempt == 0 and "reasoning_effort" in payload:
+                payload.pop("reasoning_effort", None)    # this model rejected the extra option
+                payload.pop("include_reasoning", None)
+                continue
+            break
+    return None, notes
+
+
 def _wants_reply(message) -> bool:
     text = message.text or ""
     if message.chat.type not in GROUP_TYPES:
@@ -79,9 +137,6 @@ def chat_reply(message):
         return
     if not _wants_reply(message):
         return
-    if not GROQ_API_KEY:
-        return
-
     try:
         bot.send_chat_action(message.chat.id, "typing")
     except Exception:
@@ -95,22 +150,10 @@ def chat_reply(message):
     messages += [{"role": e["r"], "content": e["c"]} for e in history]
     messages.append({"role": "user", "content": user_msg})
 
-    try:
-        resp = requests.post(
-            GROQ_URL,
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-            json={"model": GROQ_MODEL, "messages": messages, "temperature": 0.85, "max_tokens": 100},
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            log.warning("Groq error %s: %s", resp.status_code, resp.text[:200])
-            return
-        answer = resp.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        log.warning("Groq request failed: %s", e)
-        return
-
+    answer, _ = ask_groq(messages)
     if not answer:
+        if message.chat.type not in GROUP_TYPES:
+            reply(message, "Abhi mera dimaag thoda hang ho gaya 😅 Thodi der baad try karo na!", parse_mode="")
         return
     add_history(message.chat.id, user.id, "user", user_msg)
     add_history(message.chat.id, user.id, "assistant", answer)
@@ -121,3 +164,16 @@ def chat_reply(message):
 def reset_cmd(message):
     clear_history(message.chat.id, message.from_user.id)
     reply(message, "Ok ok, sab bhool gayi 🙈 Chalo fresh start!")
+
+
+@command("aitest")
+def aitest_cmd(message):
+    """Owner only: shows why Sneha isn't answering."""
+    if not is_owner(message.from_user.id):
+        return
+    answer, notes = ask_groq([{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": "Hi"}])
+    lines = ["🤖 <b>AI test</b>", f"Key set: {'yes' if GROQ_API_KEY else 'NO'}", f"Model: {GROQ_MODEL}", ""]
+    lines += [esc(n) for n in notes] or ["(no details)"]
+    lines.append("")
+    lines.append(f"Reply: {esc(answer)}" if answer else "❌ No reply - fix the problem above.")
+    reply(message, "\n".join(lines))
