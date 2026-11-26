@@ -92,6 +92,7 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 | `START_STICKER` | ➖ | Sticker file_id shown before the `/start` menu |
 | `START_IMAGE` | ➖ | Picture for `/start` (default: `assets/sneha-banner.png`) |
 | `STICKER_PACKS` | ➖ | Sticker packs Sneha answers with (pack short names, comma separated) |
+| `STICKER_BLOCK_WORDS` | ➖ | Extra words that mark a sticker pack as 18+ (a built-in list already blocks adult packs and emojis) |
 | `STICKER_CHANCE` | ➖ | `0`-`1`: chance she adds a sticker after a chat answer. Default `0.1`, `0` = never |
 | `SUPPORT_GROUP` / `UPDATE_CHANNEL` | ➖ | Links shown as buttons on `/start` |
 | `CURRENCY_NAME` / `CURRENCY_EMOJI` | ➖ | Defaults: `Bubbles` / `🫧` |
