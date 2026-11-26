@@ -25,6 +25,7 @@ import welcome  # noqa: E402,F401
 import economy  # noqa: E402,F401
 import games  # noqa: E402,F401
 import tools  # noqa: E402,F401
+import stickers  # noqa: E402,F401
 
 
 def dispatch(message):
@@ -70,6 +71,8 @@ def dispatch(message):
 
     if message.content_type == "text":
         chat.chat_reply(message)
+    elif message.content_type == "sticker":
+        stickers.on_sticker(message)
 
 
 @bot.message_handler(content_types=util.content_type_media + util.content_type_service)

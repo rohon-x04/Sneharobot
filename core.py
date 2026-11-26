@@ -71,6 +71,31 @@ def is_owner(user_id) -> bool:
     return bool(user_id) and (user_id == OWNER_ID or user_id in AUTH_USERS)
 
 
+# ---------------------------------------------------------------- coloured inline buttons
+# Telegram (Bot API 9.4+) lets an inline button carry a colour: primary = blue, success = green,
+# danger = red. This library version doesn't know that field yet, so we add it ourselves.
+BUTTON_STYLES = ("primary", "success", "danger")
+
+
+class Btn(types.InlineKeyboardButton):
+    """InlineKeyboardButton with an optional colour: Btn("Text", "success", callback_data=...)."""
+
+    def __init__(self, text, style=None, **kwargs):
+        super().__init__(text, **kwargs)
+        self.style = style
+
+    def to_dict(self):
+        data = super().to_dict()
+        if self.style in BUTTON_STYLES:
+            data["style"] = self.style
+        return data
+
+
+def rainbow(i: int) -> str:
+    """blue, green, red, blue, ... - handy for making a menu colourful."""
+    return BUTTON_STYLES[i % 3]
+
+
 # ---------------------------------------------------------------- text helpers
 esc = html.escape
 

@@ -9,7 +9,7 @@ import time
 
 from telebot import types
 
-from core import (CURRENCY_EMOJI, CURRENCY_NAME, bot, callback, command, edit, ensure_user, esc,
+from core import (Btn, CURRENCY_EMOJI, CURRENCY_NAME, bot, callback, command, edit, ensure_user, esc,
                   mention, money, reply)
 from economy import credit, spend
 
@@ -235,16 +235,16 @@ def mines_keyboard(chat_id, msg_id, state, ended: bool):
         for c in range(GRID):
             i = r * GRID + c
             if i in state["revealed"]:
-                row.append(types.InlineKeyboardButton("✅", callback_data="noop"))
+                row.append(Btn("✅", "success", callback_data="noop"))
             elif ended and i in state["mines"]:
-                row.append(types.InlineKeyboardButton("💣", callback_data="noop"))
+                row.append(Btn("💣", "danger", callback_data="noop"))
             else:
-                row.append(types.InlineKeyboardButton("🟪", callback_data=f"mine:{chat_id}:{msg_id}:{i}"))
+                row.append(Btn("🟪", "primary", callback_data=f"mine:{chat_id}:{msg_id}:{i}"))
         kb.row(*row)
     if not ended:
         cash = int(state["amount"] * state["multiplier"])
-        kb.row(types.InlineKeyboardButton(f"💰 Cash Out ({state['multiplier']:.2f}x = {cash})",
-                                          callback_data=f"minecash:{chat_id}:{msg_id}"))
+        kb.row(Btn(f"💰 Cash Out ({state['multiplier']:.2f}x = {cash})", "success",
+                   callback_data=f"minecash:{chat_id}:{msg_id}"))
     return kb
 
 

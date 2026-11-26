@@ -24,6 +24,8 @@
 | | Feature | What it does |
 |---|---|---|
 | 💬 | **AI Chat** | Sneha talks in short, sassy Hinglish. Remembers each person's last 10 messages for 2 days |
+| 🎭 | **Sticker replies** | Send her a sticker and she answers with one |
+| 🌈 | **Colourful buttons** | Blue, green and red inline buttons in menus and games |
 | 🛡 | **Moderation** | kick, ban, mute (timed), warn system, promote/demote tiers, pin, purge |
 | 🔐 | **Protection** | Locks, anti-flood, link ban, spam ban |
 | 🪬 | **Welcome** | Custom welcome text plus a random welcome card with the member's profile photo |
@@ -48,7 +50,8 @@
 ├── welcome.py          welcome message + card
 ├── economy.py          balance, daily, rob, levels
 ├── games.py            casino + fun games
-├── tools.py            help menu, utilities, /imagine, owner tools
+├── tools.py            start/help menu, utilities, /imagine, owner tools
+├── stickers.py         sticker replies
 ├── welcome_card.py     card generator
 ├── welcome_styles.py   random card styles
 ├── requirements.txt    Python packages
@@ -87,7 +90,9 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 | `AUTH_USER` | ➖ | Extra owner IDs, separated by commas |
 | `LOG_CHAT_ID` | ➖ | Group that gets a message when the bot is added or removed |
 | `START_STICKER` | ➖ | Sticker file_id shown before the `/start` menu |
-| `START_IMAGE` | ➖ | Banner picture for `/start` |
+| `START_IMAGE` | ➖ | Picture for `/start` (default: `assets/sneha-banner.png`) |
+| `STICKER_PACKS` | ➖ | Sticker packs Sneha answers with (pack short names, comma separated) |
+| `STICKER_CHANCE` | ➖ | `0`-`1`: chance she adds a sticker after a chat answer. Default `0.1`, `0` = never |
 | `SUPPORT_GROUP` / `UPDATE_CHANNEL` | ➖ | Links shown as buttons on `/start` |
 | `CURRENCY_NAME` / `CURRENCY_EMOJI` | ➖ | Defaults: `Bubbles` / `🫧` |
 | `DAILY_REWARD` / `STARTING_BALANCE` | ➖ | Defaults: `1000` / `100` |
@@ -178,7 +183,7 @@ Keep every `.py` file in the **main folder** (not inside another folder).
 ```
 /id /info /adminlist /chatinfo /ping /time
 /calc <expression>   /report (reply)
-/imagine <prompt>    /reset
+/imagine <prompt>    /reset    /stickerid (reply to a sticker)
 /stats  /broadcast  /aitest   (owner only)
 ```
 </details>
