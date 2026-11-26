@@ -13,7 +13,7 @@ import telebot
 from telebot import types, util
 from telebot.apihelper import ApiTelegramException
 
-from store import Store
+from store import Store, StoreError  # noqa: F401
 
 log = logging.getLogger("sneha")
 
@@ -276,7 +276,7 @@ def ensure_user(user_id: int, first_name: str = "", username: str = None) -> dic
     """Make sure users/<id> exists (with the starting balance) and return it."""
     _load_usernames()
     with store.lock:
-        rec = store.get(f"users/{user_id}")
+        rec = store.get(f"users/{user_id}", strict=True)
         if not isinstance(rec, dict):
             rec = {"name": first_name or "User", "balance": STARTING_BALANCE, "xp": 0}
             store.put(f"users/{user_id}", rec)
