@@ -158,6 +158,11 @@ def chat_reply(message):
     add_history(message.chat.id, user.id, "user", user_msg)
     add_history(message.chat.id, user.id, "assistant", answer)
     reply(message, answer, parse_mode="")
+    try:
+        import stickers
+        stickers.maybe_chat_sticker(message)
+    except Exception:
+        log.debug("chat sticker failed", exc_info=True)
 
 
 @command("reset", "forget")

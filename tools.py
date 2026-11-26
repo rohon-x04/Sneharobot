@@ -5,6 +5,7 @@
 import ast
 import io
 import operator
+import os
 import random
 import threading
 import time
@@ -14,7 +15,7 @@ from urllib.parse import quote
 import requests
 from telebot import types
 
-from core import (BOT, BOT_USERNAME, COPYRIGHT, CURRENCY_NAME, GROUP_TYPES, LOG_CHAT_ID,
+from core import (BOT, BOT_USERNAME, Btn, rainbow, COPYRIGHT, CURRENCY_NAME, GROUP_TYPES, LOG_CHAT_ID,
                   OWNER_USERNAME, POLLINATIONS_KEY, START_IMAGE, START_STICKER, SUPPORT_GROUP,
                   UPDATE_CHANNEL, bot, callback, command, delete, edit, esc, get_member, is_admin,
                   is_owner, log, mention, reply, resolve_target, send, sender_is_admin, store)
@@ -22,85 +23,141 @@ from core import (BOT, BOT_USERNAME, COPYRIGHT, CURRENCY_NAME, GROUP_TYPES, LOG_
 NOT_ADMIN = "❌ You need to be an admin to use this."
 
 # ------------------------------------------------------------ /start and /help
-HELP_HOME = (
-    "📚 <b>Sneha ke commands</b>\n\n"
-    "Neeche se ek category chuno 👇\n"
-    "Group mein mujhse baat karne ke liye mera naam lo ya mere message pe reply karo 😊"
-)
+LINE = "━━━━━━━━━━━━━━━━━━━━"
+
+
+def _page(title, lines):
+    body = "\n".join(lines)
+    return f"╭{LINE}╮\n   {title}\n╰{LINE}╯\n\n{body}\n\n<i>{COPYRIGHT}</i>"
+
+
+HELP_HOME = _page("📚 <b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>", [
+    "ᴄʜᴜɴᴏ ᴇᴋ ᴄᴀᴛᴇɢᴏʀʏ ɴᴇᴇᴄʜᴇ sᴇ 👇",
+    "",
+    "💬 ɢʀᴏᴜᴘ ᴍᴇɪɴ ᴍᴜᴊʜsᴇ ʙᴀᴀᴛ ᴋᴀʀɴᴇ ᴋᴇ ʟɪʏᴇ",
+    "ᴍᴇʀᴀ ɴᴀᴀᴍ ʟᴏ, @ᴍᴇɴᴛɪᴏɴ ᴋᴀʀᴏ, ʏᴀ ʀᴇᴘʟʏ ᴋᴀʀᴏ 💕",
+])
 
 HELP_PAGES = {
-    "mod": ("🛡 <b>Moderation</b> (admins)\n\n"
-            "/kick /ban /unban — reply or @user\n"
-            "/mute [10m|2h|1d] /unmute\n"
-            "/warn /warns /unwarn /resetwarns\n"
-            "/setwarn &lt;n&gt; — warn limit\n"
-            "/warnmode mute|kick|ban\n"
-            "/promote [1|2|3] /demote\n"
-            "/pin /unpin /del /purge"),
-    "guard": ("🔐 <b>Group protection</b> (admins)\n\n"
-              "/lock /unlock /locks — url, sticker, media, username, forward\n"
-              "/setflood &lt;n&gt; /noflood /flood\n"
-              "/linkban on|off — delete links + warn\n"
-              "/spamban on|off — mute spammers"),
-    "welcome": ("🪬 <b>Welcome</b> (admins)\n\n"
-                "/setwelcome &lt;text&gt; — placeholders: {first_name} {name} {mention} {username} {id} {group}\n"
-                "/resetwelcome\n"
-                "/welcome on|off\n"
-                "/welcomecard on|off — profile-photo welcome picture"),
-    "notes": ("🧿 <b>Notes, filters &amp; rules</b>\n\n"
-              "/save &lt;name&gt; &lt;text&gt; · /get &lt;name&gt; · #name · /notes · /clear · /clearall\n"
-              "/filter &lt;word&gt; &lt;reply&gt; · /filters · /stop &lt;word&gt; · /stopall\n"
-              "/setrules · /rules · /clearrules\n"
-              "/afk [reason] — mark yourself away"),
-    "eco": (f"💸 <b>Economy ({CURRENCY_NAME})</b>\n\n"
-            "/balance · /daily · /give &lt;user&gt; &lt;amount&gt;\n"
-            "/rob (reply) · /leaderboard · /profile\n"
-            "/level · /toplevel"),
-    "games": ("🎰 <b>Games &amp; fun</b>\n\n"
-              "/jackpot &lt;amount&gt; · /roulette &lt;amount&gt; &lt;bet&gt; · /mines &lt;amount&gt; [mines]\n"
-              "/roll · /flip · /8ball · /rps · /guess &lt;1-100&gt;\n"
-              "/hug · /slap · /pat (reply) · /quote"),
-    "util": ("🔮 <b>Utility</b>\n\n"
-             "/id · /info · /adminlist · /chatinfo\n"
-             "/ping · /time · /calc &lt;expr&gt; · /report (reply)\n"
-             "/imagine &lt;prompt&gt; — AI picture\n"
-             "/reset — make me forget our chat"),
+    "mod": _page("🛡 <b>ᴍᴏᴅᴇʀᴀᴛɪᴏɴ</b> <i>(admins)</i>", [
+        "➤ /kick /ban /unban — reply or @user",
+        "➤ /mute [10m|2h|1d] · /unmute",
+        "➤ /warn · /warns · /unwarn · /resetwarns",
+        "➤ /setwarn &lt;n&gt; · /warnmode mute|kick|ban",
+        "➤ /promote [1|2|3] · /demote",
+        "➤ /pin · /unpin · /del · /purge"]),
+    "guard": _page("🔐 <b>ᴘʀᴏᴛᴇᴄᴛɪᴏɴ</b> <i>(admins)</i>", [
+        "➤ /lock · /unlock · /locks",
+        "     url, sticker, media, username, forward",
+        "➤ /setflood &lt;n&gt; · /noflood · /flood",
+        "➤ /linkban on|off — delete links + warn",
+        "➤ /spamban on|off — mute spammers"]),
+    "welcome": _page("🪬 <b>ᴡᴇʟᴄᴏᴍᴇ</b> <i>(admins)</i>", [
+        "➤ /setwelcome &lt;text&gt;",
+        "     {first_name} {name} {mention} {username} {id} {group}",
+        "➤ /resetwelcome",
+        "➤ /welcome on|off",
+        "➤ /welcomecard on|off — profile-photo card"]),
+    "notes": _page("🧿 <b>ɴᴏᴛᴇs · ꜰɪʟᴛᴇʀs · ʀᴜʟᴇs</b>", [
+        "➤ /save &lt;name&gt; &lt;text&gt; · /get · #name · /notes",
+        "➤ /clear &lt;name&gt; · /clearall",
+        "➤ /filter &lt;word&gt; &lt;reply&gt; · /filters · /stop · /stopall",
+        "➤ /setrules · /rules · /clearrules",
+        "➤ /afk [reason] — mark yourself away"]),
+    "eco": _page(f"💸 <b>ᴇᴄᴏɴᴏᴍʏ</b> <i>({CURRENCY_NAME})</i>", [
+        "➤ /balance · /daily",
+        "➤ /give &lt;user&gt; &lt;amount&gt;",
+        "➤ /rob (reply) · /leaderboard",
+        "➤ /profile · /level · /toplevel"]),
+    "games": _page("🎰 <b>ɢᴀᴍᴇs &amp; ꜰᴜɴ</b>", [
+        "➤ /jackpot &lt;amount&gt;",
+        "➤ /roulette &lt;amount&gt; &lt;bet&gt;",
+        "➤ /mines &lt;amount&gt; [mines]",
+        "➤ /roll · /flip · /8ball · /rps · /guess",
+        "➤ /hug · /slap · /pat (reply) · /quote"]),
+    "util": _page("🔮 <b>ᴜᴛɪʟɪᴛʏ</b>", [
+        "➤ /id · /info · /adminlist · /chatinfo",
+        "➤ /ping · /time · /calc &lt;expr&gt; · /report",
+        "➤ /imagine &lt;prompt&gt; — AI picture 🎨",
+        "➤ /reset — make me forget our chat",
+        "➤ /stickerid — reply to a sticker"]),
 }
+
+# (button text, page key) - colours cycle blue / green / red
+_CATEGORIES = [
+    ("🛡 Moderation", "mod"), ("🔐 Protection", "guard"),
+    ("🪬 Welcome", "welcome"), ("🧿 Notes & Rules", "notes"),
+    ("💸 Economy", "eco"), ("🎰 Games", "games"),
+]
 
 
 def _home_markup():
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("🛡 Moderation", callback_data="help:mod"),
-        types.InlineKeyboardButton("🔐 Protection", callback_data="help:guard"),
-        types.InlineKeyboardButton("🪬 Welcome", callback_data="help:welcome"),
-        types.InlineKeyboardButton("🧿 Notes & Rules", callback_data="help:notes"),
-        types.InlineKeyboardButton("💸 Economy", callback_data="help:eco"),
-        types.InlineKeyboardButton("🎰 Games", callback_data="help:games"),
-        types.InlineKeyboardButton("🔮 Utility", callback_data="help:util"),
-    )
+    kb = types.InlineKeyboardMarkup()
+    for i in range(0, len(_CATEGORIES), 2):
+        kb.row(*[Btn(text, rainbow(i + j), callback_data=f"help:{page}")
+                 for j, (text, page) in enumerate(_CATEGORIES[i:i + 2])])
+    kb.row(Btn("🔮 Utility", "primary", callback_data="help:util"),
+           Btn("🏠 Start", "success", callback_data="help:start"))
     return kb
+
+
+def _start_text(user):
+    return (f"╭{LINE}╮\n   🌸 <b>sɴᴇʜᴀ ʙᴏᴛ</b> 🌸\n╰{LINE}╯\n\n"
+            f"ʜɪɪ <b>{esc(user.first_name)}</b>! 💕\n"
+            "ᴍᴀɪɴ <b>Sneha</b> ʜᴏᴏɴ — ᴛᴜᴍʜᴀʀɪ ꜰʀɪᴇɴᴅʟʏ ʜɪɴɢʟɪsʜ ᴅᴏsᴛ 😊\n\n"
+            "💬 ʙᴀᴀᴛᴇɪɴ · 🛡 ᴍᴏᴅᴇʀᴀᴛɪᴏɴ · 💸 ᴇᴄᴏɴᴏᴍʏ\n"
+            "🎰 ɢᴀᴍᴇs · 🎨 ᴀɪ ᴘɪᴄᴛᴜʀᴇs · 🪬 ᴡᴇʟᴄᴏᴍᴇ ᴄᴀʀᴅs\n\n"
+            f"👇 ʙᴜᴛᴛᴏɴs sᴇ ᴀᴀɢᴇ ʙᴀᴅʜᴏ\n\n<i>{COPYRIGHT}</i>")
 
 
 def _start_markup():
-    kb = types.InlineKeyboardMarkup()
-    kb.row(types.InlineKeyboardButton("➕ Add me to your group",
-                                      url=f"https://t.me/{BOT_USERNAME}?startgroup=true"))
-    kb.row(types.InlineKeyboardButton("📚 Help", callback_data="help:home"))
+    kb = Btn  # short name
+    m = types.InlineKeyboardMarkup()
+    m.row(kb("➕ Add me to your group", "primary",
+             url=f"https://t.me/{BOT_USERNAME}?startgroup=true"))
+    m.row(kb("📚 Help & Commands", "success", callback_data="help:home"))
+    m.row(kb("🎰 Games", "danger", callback_data="help:games"),
+          kb("💸 Economy", "primary", callback_data="help:eco"))
     links = []
     if SUPPORT_GROUP.startswith("http"):
-        links.append(types.InlineKeyboardButton("💬 Support", url=SUPPORT_GROUP))
+        links.append(kb("💬 Support", "success", url=SUPPORT_GROUP))
     if UPDATE_CHANNEL.startswith("http"):
-        links.append(types.InlineKeyboardButton("📢 Updates", url=UPDATE_CHANNEL))
-    if links:
-        kb.row(*links)
-    return kb
+        links.append(kb("📢 Updates", "danger", url=UPDATE_CHANNEL))
+    if OWNER_USERNAME:
+        links.append(kb("👑 Owner", "primary", url=f"https://t.me/{OWNER_USERNAME}"))
+    for i in range(0, len(links), 2):
+        m.row(*links[i:i + 2])
+    return m
+
+
+_banner_file_id = None
+BANNER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "sneha-banner.png")
+
+
+def _send_start_ui(chat_id, user):
+    """Banner picture + text + coloured buttons. Falls back to plain text if anything fails."""
+    global _banner_file_id
+    text, markup = _start_text(user), _start_markup()
+    photo = START_IMAGE or _banner_file_id
+    try:
+        if photo:
+            bot.send_photo(chat_id, photo, caption=text, reply_markup=markup)
+        elif os.path.exists(BANNER_PATH):
+            with open(BANNER_PATH, "rb") as f:
+                sent = bot.send_photo(chat_id, f, caption=text, reply_markup=markup)
+            _banner_file_id = sent.photo[-1].file_id
+        else:
+            raise FileNotFoundError("no banner")
+    except Exception:
+        log.info("start banner not sent, using text", exc_info=True)
+        send(chat_id, text, reply_markup=markup)
 
 
 @command("start")
 def start_cmd(message):
     if message.chat.type != "private":
-        return reply(message, "Hii! 😊 Mujhse DM mein /start karo ya group mein mera naam lo.")
+        return reply(message, "Hii! 😊 Mujhse DM mein /start karo ya group mein mera naam lo.",
+                     reply_markup=_group_start_markup())
     if START_STICKER:
         try:
             st = bot.send_sticker(message.chat.id, START_STICKER)
@@ -108,16 +165,14 @@ def start_cmd(message):
             delete(st)
         except Exception:
             pass
-    text = (f"Hii {esc(message.from_user.first_name)}! 😊\n"
-            f"Main <b>Sneha</b> hoon — tumhari dost 💕 Mujhse baat karo, ya group mein add karke "
-            f"moderation, games aur economy ka maza lo!\n\n<i>{COPYRIGHT}</i>")
-    try:
-        if START_IMAGE:
-            bot.send_photo(message.chat.id, START_IMAGE, caption=text, reply_markup=_start_markup())
-        else:
-            send(message.chat.id, text, reply_markup=_start_markup())
-    except Exception:
-        send(message.chat.id, text, reply_markup=_start_markup())
+    _send_start_ui(message.chat.id, message.from_user)
+
+
+def _group_start_markup():
+    m = types.InlineKeyboardMarkup()
+    m.row(Btn("💬 Chat in DM", "primary", url=f"https://t.me/{BOT_USERNAME}?start=hi"),
+          Btn("📚 Help", "success", callback_data="help:home"))
+    return m
 
 
 @command("help")
@@ -128,19 +183,23 @@ def help_cmd(message):
 @callback("help:")
 def help_cb(call):
     page = call.data.split(":", 1)[1]
-    if page == "home":
+    if page == "start":
+        text, kb = _start_text(call.from_user), _start_markup()
+    elif page == "home":
         text, kb = HELP_HOME, _home_markup()
     else:
         text = HELP_PAGES.get(page, HELP_HOME)
         kb = types.InlineKeyboardMarkup()
-        kb.row(types.InlineKeyboardButton("⬅️ Back", callback_data="help:home"))
+        kb.row(Btn("⬅️ Back", "danger", callback_data="help:home"),
+               Btn("🏠 Menu", "success", callback_data="help:start"))
     try:
         if call.message.content_type == "text":
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=kb)
         else:
             bot.edit_message_caption(text, call.message.chat.id, call.message.message_id, reply_markup=kb)
     except Exception:
-        send(call.message.chat.id, text, reply_markup=kb)
+        # "message is not modified" etc. - nothing to do
+        pass
     bot.answer_callback_query(call.id)
 
 
